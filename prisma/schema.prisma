@@ -16,6 +16,15 @@ datasource db {
 }
 
 //
+// Enums
+//
+
+enum ConnectivityStatus {
+    never_connected
+    online
+    offline
+}
+//
 // Account
 //
 
@@ -91,23 +100,27 @@ model AccountPushToken {
 //
 
 model Session {
-    id                String           @id @default(cuid())
-    tag               String
-    accountId         String
-    account           Account          @relation(fields: [accountId], references: [id])
-    metadata          String
-    metadataVersion   Int              @default(0)
-    agentState        String?
-    agentStateVersion Int              @default(0)
-    dataEncryptionKey Bytes?
-    seq               Int              @default(0)
-    active            Boolean          @default(true)
-    lastActiveAt      DateTime         @default(now())
-    createdAt         DateTime         @default(now())
-    updatedAt         DateTime         @updatedAt
-    messages          SessionMessage[]
-    usageReports      UsageReport[]
-    accessKeys        AccessKey[]
+    id                      String              @id @default(cuid())
+    tag                     String
+    accountId               String
+    account                 Account             @relation(fields: [accountId], references: [id])
+    metadata                String
+    metadataVersion         Int                 @default(0)
+    agentState              String?
+    agentStateVersion       Int                 @default(0)
+    seq                     Int                 @default(0)
+    active                  Boolean             @default(true)
+    lastActiveAt            DateTime            @default(now())
+    
+    // Connectivity tracking
+    connectivityStatus      ConnectivityStatus  @default(never_connected)
+    connectivityStatusSince DateTime            @default(now())
+    connectivityStatusReason String             @default("")
+    
+    createdAt               DateTime            @default(now())
+    updatedAt               DateTime            @updatedAt
+    messages                SessionMessage[]
+    usageReports            UsageReport[]
 
     @@unique([accountId, tag])
     @@index([accountId, updatedAt(sort: Desc)])
@@ -202,20 +215,24 @@ model UsageReport {
 //
 
 model Machine {
-    id                 String      @id
-    accountId          String
-    account            Account     @relation(fields: [accountId], references: [id])
-    metadata           String // Encrypted - contains static machine info
-    metadataVersion    Int         @default(0)
-    daemonState        String? // Encrypted - contains dynamic daemon state
-    daemonStateVersion Int         @default(0)
-    dataEncryptionKey  Bytes?
-    seq                Int         @default(0)
-    active             Boolean     @default(true)
-    lastActiveAt       DateTime    @default(now())
-    createdAt          DateTime    @default(now())
-    updatedAt          DateTime    @updatedAt
-    accessKeys         AccessKey[]
+    id                      String              @id
+    accountId               String
+    account                 Account             @relation(fields: [accountId], references: [id])
+    metadata                String              // Encrypted - contains static machine info
+    metadataVersion         Int                 @default(0)
+    daemonState             String?             // Encrypted - contains dynamic daemon state
+    daemonStateVersion      Int                 @default(0)
+    seq                     Int                 @default(0)
+    active                  Boolean             @default(true)
+    lastActiveAt            DateTime            @default(now())
+    
+    // Connectivity tracking
+    connectivityStatus      ConnectivityStatus  @default(never_connected)
+    connectivityStatusSince DateTime            @default(now())
+    connectivityStatusReason String             @default("")
+    
+    createdAt               DateTime            @default(now())
+    updatedAt               DateTime            @updatedAt
 
     @@unique([accountId, id])
     @@index([accountId])

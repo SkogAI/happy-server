@@ -1,0 +1,203 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+    provider        = "prisma-client-js"
+    previewFeatures = ["metrics", "relationJoins"]
+}
+
+generator json {
+    provider = "prisma-json-types-generator"
+}
+
+datasource db {
+    provider = "postgresql"
+    url      = env("DATABASE_URL")
+}
+
+//
+// Enums
+//
+
+enum ConnectivityStatus {
+    NEVER_CONNECTED
+    ONLINE
+    OFFLINE
+}
+
+enum SessionLifecycle {
+    ACTIVE
+    ARCHIVE_REQUESTED
+    ARCHIVED
+}
+//
+// Account
+//
+
+model Account {
+    id                  String                @id @default(cuid())
+    publicKey           String                @unique
+    seq                 Int                   @default(0)
+    createdAt           DateTime              @default(now())
+    updatedAt           DateTime              @updatedAt
+    settings            String?
+    settingsVersion     Int                   @default(0)
+    Session             Session[]
+    AccountPushToken    AccountPushToken[]
+    TerminalAuthRequest TerminalAuthRequest[]
+    AccountAuthRequest  AccountAuthRequest[]
+    UsageReport         UsageReport[]
+    Machine             Machine[]
+}
+
+model TerminalAuthRequest {
+    id                String   @id @default(cuid())
+    publicKey         String   @unique
+    response          String?
+    responseAccountId String?
+    responseAccount   Account? @relation(fields: [responseAccountId], references: [id])
+    createdAt         DateTime @default(now())
+    updatedAt         DateTime @updatedAt
+}
+
+model AccountAuthRequest {
+    id                String   @id @default(cuid())
+    publicKey         String   @unique
+    response          String?
+    responseAccountId String?
+    responseAccount   Account? @relation(fields: [responseAccountId], references: [id])
+    createdAt         DateTime @default(now())
+    updatedAt         DateTime @updatedAt
+}
+
+model AccountPushToken {
+    id        String   @id @default(cuid())
+    accountId String
+    account   Account  @relation(fields: [accountId], references: [id])
+    token     String
+    createdAt DateTime @default(now())
+    updatedAt DateTime @updatedAt
+
+    @@unique([accountId, token])
+}
+
+//
+// Sessions
+//
+
+model Session {
+    id                      String              @id @default(cuid())
+    tag                     String
+    accountId               String
+    account                 Account             @relation(fields: [accountId], references: [id])
+    metadata                String
+    metadataVersion         Int                 @default(0)
+    agentState              String?
+    agentStateVersion       Int                 @default(0)
+    seq                     Int                 @default(0)
+    active                  Boolean             @default(true)
+    lastActiveAt            DateTime            @default(now())
+    
+    // Connectivity tracking
+    connectivityStatus      ConnectivityStatus  @default(NEVER_CONNECTED)
+    connectivityStatusSince DateTime            @default(now())
+    connectivityStatusReason String             @default("")
+    
+    createdAt               DateTime            @default(now())
+    updatedAt               DateTime            @updatedAt
+    messages                SessionMessage[]
+    usageReports            UsageReport[]
+
+    @@unique([accountId, tag])
+    @@index([accountId, updatedAt(sort: Desc)])
+}
+
+model SessionMessage {
+    id        String   @id @default(cuid())
+    sessionId String
+    session   Session  @relation(fields: [sessionId], references: [id])
+    localId   String?
+    seq       Int
+    /// [SessionMessageContent]
+    content   Json
+    createdAt DateTime @default(now())
+    updatedAt DateTime @updatedAt
+
+    @@unique([sessionId, localId])
+    @@index([sessionId, seq])
+}
+
+//
+// Utility
+//
+
+model GlobalLock {
+    key       String   @id @default(cuid())
+    value     String
+    createdAt DateTime @default(now())
+    updatedAt DateTime @updatedAt
+    expiresAt DateTime
+}
+
+model RepeatKey {
+    key       String   @id
+    value     String
+    createdAt DateTime @default(now())
+    expiresAt DateTime
+}
+
+model SimpleCache {
+    key       String   @id
+    value     String
+    createdAt DateTime @default(now())
+    updatedAt DateTime @updatedAt
+}
+
+//
+// Usage Reporting
+//
+
+model UsageReport {
+    id        String   @id @default(cuid())
+    key       String
+    accountId String
+    account   Account  @relation(fields: [accountId], references: [id])
+    sessionId String?
+    session   Session? @relation(fields: [sessionId], references: [id])
+    /// [UsageReportData]
+    data      Json
+    createdAt DateTime @default(now())
+    updatedAt DateTime @updatedAt
+
+    @@unique([accountId, sessionId, key])
+    @@index([accountId])
+    @@index([sessionId])
+}
+
+//
+// Machines
+//
+
+model Machine {
+    id                      String              @id
+    accountId               String
+    account                 Account             @relation(fields: [accountId], references: [id])
+    metadata                String              // Encrypted - contains static machine info
+    metadataVersion         Int                 @default(0)
+    daemonState             String?             // Encrypted - contains dynamic daemon state
+    daemonStateVersion      Int                 @default(0)
+    seq                     Int                 @default(0)
+    active                  Boolean             @default(true)
+    lastActiveAt            DateTime            @default(now())
+    
+    // Connectivity tracking
+    connectivityStatus      ConnectivityStatus  @default(NEVER_CONNECTED)
+    connectivityStatusSince DateTime            @default(now())
+    connectivityStatusReason String             @default("")
+    
+    createdAt               DateTime            @default(now())
+    updatedAt               DateTime            @updatedAt
+
+    @@unique([accountId, id])
+    @@index([accountId])
+}
